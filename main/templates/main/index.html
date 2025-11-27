@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Realtime Transcription & Visualizer</title>
+    <style>
+      /* 全体のレイアウト設定 */
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100vw;
+        height: 100vh;
+        background-color: #1a1a1a; /* 暗い背景 */
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        overflow: hidden;
+        font-family: sans-serif;
+      }
+
+      /* 操作ボタンのコンテナ（左上に配置） */
+      .controls {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        z-index: 100;
+        background: rgba(0, 0, 0, 0.5);
+        padding: 10px;
+        border-radius: 8px;
+      }
+
+      button {
+        padding: 8px 16px;
+        cursor: pointer;
+        font-size: 14px;
+      }
+
+      /* 音に反応する球体 */
+      #sphere {
+        width: 150px;
+        height: 150px;
+        background: linear-gradient(135deg, #00d2ff 0%, #3a7bd5 100%);
+        border-radius: 50%;
+        box-shadow: 0 0 30px rgba(0, 210, 255, 0.6);
+        transition: transform 0.05s ease-out; /* 滑らかに動かす */
+        will-change: transform;
+      }
+
+      /* 字幕エリア */
+      #transcription {
+        position: absolute;
+        bottom: 10%;
+        width: 80%;
+        text-align: center;
+        color: white;
+        font-size: 2rem;
+        font-weight: bold;
+        text-shadow: 2px 2px 4px #000000, 0 0 10px rgba(0,0,0,0.8); /* 文字を見やすくする影 */
+        pointer-events: none; /* マウスイベントを透過 */
+        line-height: 1.5;
+        max-height: 30vh;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="controls">
+      <h1 style="color: white; font-size: 16px; margin: 0 0 10px 0;">Whisper Transcription</h1>
+      <button id="startBtn">Start Recording</button>
+      <button id="stopBtn" disabled>Stop</button>
+    </div>
+
+    <div id="sphere"></div>
+
+    <div id="transcription"></div>
+
+    <script>
+      let socket;
+      let audioContext;
+      let processor;
+      let input;
+      let globalStream;
+      let analyser; // 音量解析用ノード
+      let animationId; // アニメーションループID
+
+      const startBtn = document.getElementById("startBtn");
+      const stopBtn = document.getElementById("stopBtn");
+      const transcriptionDiv = document.getElementById("transcription");
+      const sphere = document.getElementById("sphere");
+
+      startBtn.onclick = async () => {
+        // WebSocket接続
+        // 実際の環境に合わせてURLは適宜変更してください
+        socket = new WebSocket(
+          "ws://" + window.location.host + "/ws/transcribe/"
+        );
+
+        socket.onopen = async () => {
+          console.log("WebSocket Connected");
+          startRecording();
+        };
+
+        socket.onmessage = (e) => {
+          const data = JSON.parse(e.data);
+          // 追記型ですが、字幕っぽく見せるため最新のテキストを目立たせる等の処理も可能
+          // ここではシンプルに追記します
+          const span = document.createElement("div");
+          span.innerText = data.message;
+          transcriptionDiv.appendChild(span);
+          
+          // 古い字幕が増えすぎたら削除する（オプション）
+          if (transcriptionDiv.childElementCount > 5) {
+             transcriptionDiv.removeChild(transcriptionDiv.firstChild);
+          }
+        };
+      };
+
+      stopBtn.onclick = () => {
+        stopRecording();
+        if (socket) socket.close();
+      };
+
+      async function startRecording() {
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+        transcriptionDiv.innerHTML = ""; // 開始時に字幕クリア
+
+        audioContext = new (window.AudioContext || window.webkitAudioContext)({
+          sampleRate: 16000,
+        });
+
+        try {
+          globalStream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+          });
+          input = audioContext.createMediaStreamSource(globalStream);
+
+          // --- 変更点: 音量解析用の AnalyserNode を作成 ---
+          analyser = audioContext.createAnalyser();
+          analyser.fftSize = 256; // 解析サイズ（小さいほど高速）
+          input.connect(analyser); // 入力を解析機に接続
+
+          // ビジュアライザーのアニメーション開始
+          visualize();
+
+          // --- 録音・送信用の Processor ---
+          processor = audioContext.createScriptProcessor(4096, 1, 1);
+          input.connect(processor);
+          
+          // ハウリング防止のため、destination（スピーカー）への接続は削除しました。
+          // もし自分の声をスピーカーから聞きたい場合は以下のコメントを外してください。
+          // processor.connect(audioContext.destination);
+          // ハウリング防止のため、Web Audio APIではScriptProcessorをdestinationに繋がない限り
+          // processイベントが発火しない仕様のブラウザ(Chromeなど)への対策として
+          // ダミーのGainNodeを経由させるのが一般的ですが、
+          // 最近のChromeでは connect(destination) しなくても onaudioprocess が動く場合が多いです。
+          // もし動かない場合は以下のように gain 0 で繋いでください。
+          const muteNode = audioContext.createGain();
+          muteNode.gain.value = 0;
+          processor.connect(muteNode);
+          muteNode.connect(audioContext.destination);
+
+          processor.onaudioprocess = (e) => {
+            const inputData = e.inputBuffer.getChannelData(0);
+            if (socket && socket.readyState === WebSocket.OPEN) {
+              socket.send(inputData.buffer);
+            }
+          };
+        } catch (e) {
+          console.error(e);
+          alert("マイクへのアクセスが拒否されました");
+        }
+      }
+
+      function visualize() {
+        if (!analyser) return;
+
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        analyser.getByteFrequencyData(dataArray);
+
+        // 全周波数の平均音量を取得
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+          sum += dataArray[i];
+        }
+        const average = sum / dataArray.length;
+
+        // 音量に応じてスケール計算 (基本サイズ1 + 音量係数)
+        // 係数(0.02)は感度調整用です
+        const scale = 1 + average * 0.02;
+
+        // 球体のCSSを更新
+        sphere.style.transform = `scale(${scale})`;
+
+        animationId = requestAnimationFrame(visualize);
+      }
+
+      function stopRecording() {
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+
+        if (globalStream)
+          globalStream.getTracks().forEach((track) => track.stop());
+        if (processor) processor.disconnect();
+        if (analyser) analyser.disconnect();
+        if (input) input.disconnect();
+        if (audioContext) audioContext.close();
+        if (animationId) cancelAnimationFrame(animationId);
+        
+        // 停止時に球体を元のサイズに戻す
+        sphere.style.transform = "scale(1)";
+      }
+    </script>
+  </body>
+</html>

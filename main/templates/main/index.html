@@ -141,25 +141,29 @@
         socket.onmessage = (e) => {
           const data = JSON.parse(e.data);
 
+          // --- 音声データの受信処理 (追加) ---
+          if (data.type === "audio") {
+            // Base64文字列から音声を再生
+            const audio = new Audio("data:audio/mp3;base64," + data.audio);
+            audio.play().catch((e) => console.error("再生エラー:", e));
+            return; // 音声のみの場合はここで終了
+          }
+          // ------------------------------
+
           const div = document.createElement("div");
           div.classList.add("message-row");
           div.innerText = data.message;
 
-          // --- ここで色分け ---
           if (data.type === "ai") {
             div.classList.add("ai-message");
-            // AIが喋ったときは字幕に「AI:」と付けても分かりやすいかも（お好みで）
-            // div.innerText = "🤖 " + data.message;
           } else if (data.type === "error") {
             div.classList.add("error-message");
           } else {
-            // デフォルトはユーザー（白）
             div.classList.add("user-message");
           }
 
           transcriptionDiv.appendChild(div);
 
-          // 表示数を制限（古いものを消す）
           if (transcriptionDiv.childElementCount > 6) {
             transcriptionDiv.removeChild(transcriptionDiv.firstChild);
           }

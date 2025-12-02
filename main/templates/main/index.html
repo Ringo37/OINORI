@@ -45,29 +45,66 @@
         will-change: transform;
       }
 
-      /* 字幕エリア */
+      /* 字幕エリア全体 */
       #transcription {
         position: absolute;
         bottom: 10%;
         width: 80%;
         text-align: center;
-        color: white;
-        font-size: 2rem;
+        font-size: 1.5rem; /* 少し小さくして複数行見やすく */
         font-weight: bold;
-        text-shadow: 2px 2px 4px #000000, 0 0 10px rgba(0,0,0,0.8); /* 文字を見やすくする影 */
-        pointer-events: none; /* マウスイベントを透過 */
+        text-shadow: 2px 2px 4px #000000, 0 0 10px rgba(0, 0, 0, 0.8);
+        pointer-events: none;
         line-height: 1.5;
-        max-height: 30vh;
+        max-height: 40vh; /* 表示エリアを広げる */
         overflow: hidden;
         display: flex;
         flex-direction: column;
         justify-content: flex-end;
+        align-items: center;
+      }
+
+      /* 個別のメッセージスタイル */
+      .message-row {
+        margin: 5px 0;
+        padding: 5px 15px;
+        border-radius: 10px;
+        animation: fadeIn 0.3s ease-in;
+      }
+
+      /* ユーザーの発言（白） */
+      .user-message {
+        color: #ffffff;
+      }
+
+      /* AIの発言（黄色・少し強調） */
+      .ai-message {
+        color: #ffeb3b; /* 鮮やかな黄色 */
+        font-size: 1.1em; /* 少し大きく */
+      }
+
+      /* エラーメッセージ（赤） */
+      .error-message {
+        color: #ff5252;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
       }
     </style>
   </head>
   <body>
     <div class="controls">
-      <h1 style="color: white; font-size: 16px; margin: 0 0 10px 0;">Whisper Transcription</h1>
+      <h1 style="color: white; font-size: 16px; margin: 0 0 10px 0">
+        AI Conversation
+      </h1>
       <button id="startBtn">Start Recording</button>
       <button id="stopBtn" disabled>Stop</button>
     </div>
@@ -82,8 +119,8 @@
       let processor;
       let input;
       let globalStream;
-      let analyser; // 音量解析用ノード
-      let animationId; // アニメーションループID
+      let analyser;
+      let animationId;
 
       const startBtn = document.getElementById("startBtn");
       const stopBtn = document.getElementById("stopBtn");
@@ -92,7 +129,6 @@
 
       startBtn.onclick = async () => {
         // WebSocket接続
-        // 実際の環境に合わせてURLは適宜変更してください
         socket = new WebSocket(
           "ws://" + window.location.host + "/ws/transcribe/"
         );
@@ -104,15 +140,28 @@
 
         socket.onmessage = (e) => {
           const data = JSON.parse(e.data);
-          // 追記型ですが、字幕っぽく見せるため最新のテキストを目立たせる等の処理も可能
-          // ここではシンプルに追記します
-          const span = document.createElement("div");
-          span.innerText = data.message;
-          transcriptionDiv.appendChild(span);
-          
-          // 古い字幕が増えすぎたら削除する（オプション）
-          if (transcriptionDiv.childElementCount > 5) {
-             transcriptionDiv.removeChild(transcriptionDiv.firstChild);
+
+          const div = document.createElement("div");
+          div.classList.add("message-row");
+          div.innerText = data.message;
+
+          // --- ここで色分け ---
+          if (data.type === "ai") {
+            div.classList.add("ai-message");
+            // AIが喋ったときは字幕に「AI:」と付けても分かりやすいかも（お好みで）
+            // div.innerText = "🤖 " + data.message;
+          } else if (data.type === "error") {
+            div.classList.add("error-message");
+          } else {
+            // デフォルトはユーザー（白）
+            div.classList.add("user-message");
+          }
+
+          transcriptionDiv.appendChild(div);
+
+          // 表示数を制限（古いものを消す）
+          if (transcriptionDiv.childElementCount > 6) {
+            transcriptionDiv.removeChild(transcriptionDiv.firstChild);
           }
         };
       };
@@ -125,7 +174,7 @@
       async function startRecording() {
         startBtn.disabled = true;
         stopBtn.disabled = false;
-        transcriptionDiv.innerHTML = ""; // 開始時に字幕クリア
+        transcriptionDiv.innerHTML = "";
 
         audioContext = new (window.AudioContext || window.webkitAudioContext)({
           sampleRate: 16000,
@@ -137,26 +186,15 @@
           });
           input = audioContext.createMediaStreamSource(globalStream);
 
-          // --- 変更点: 音量解析用の AnalyserNode を作成 ---
           analyser = audioContext.createAnalyser();
-          analyser.fftSize = 256; // 解析サイズ（小さいほど高速）
-          input.connect(analyser); // 入力を解析機に接続
+          analyser.fftSize = 256;
+          input.connect(analyser);
 
-          // ビジュアライザーのアニメーション開始
           visualize();
 
-          // --- 録音・送信用の Processor ---
           processor = audioContext.createScriptProcessor(4096, 1, 1);
           input.connect(processor);
-          
-          // ハウリング防止のため、destination（スピーカー）への接続は削除しました。
-          // もし自分の声をスピーカーから聞きたい場合は以下のコメントを外してください。
-          // processor.connect(audioContext.destination);
-          // ハウリング防止のため、Web Audio APIではScriptProcessorをdestinationに繋がない限り
-          // processイベントが発火しない仕様のブラウザ(Chromeなど)への対策として
-          // ダミーのGainNodeを経由させるのが一般的ですが、
-          // 最近のChromeでは connect(destination) しなくても onaudioprocess が動く場合が多いです。
-          // もし動かない場合は以下のように gain 0 で繋いでください。
+
           const muteNode = audioContext.createGain();
           muteNode.gain.value = 0;
           processor.connect(muteNode);
@@ -180,18 +218,14 @@
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
         analyser.getByteFrequencyData(dataArray);
 
-        // 全周波数の平均音量を取得
         let sum = 0;
         for (let i = 0; i < dataArray.length; i++) {
           sum += dataArray[i];
         }
         const average = sum / dataArray.length;
 
-        // 音量に応じてスケール計算 (基本サイズ1 + 音量係数)
-        // 係数(0.02)は感度調整用です
         const scale = 1 + average * 0.02;
 
-        // 球体のCSSを更新
         sphere.style.transform = `scale(${scale})`;
 
         animationId = requestAnimationFrame(visualize);
@@ -208,8 +242,7 @@
         if (input) input.disconnect();
         if (audioContext) audioContext.close();
         if (animationId) cancelAnimationFrame(animationId);
-        
-        // 停止時に球体を元のサイズに戻す
+
         sphere.style.transform = "scale(1)";
       }
     </script>

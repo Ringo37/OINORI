@@ -2,8 +2,8 @@ import json
 import numpy as np
 import asyncio
 import os
-import base64  # 追加
-import edge_tts  # 追加
+import base64
+import edge_tts
 from channels.generic.websocket import AsyncWebsocketConsumer
 from faster_whisper import WhisperModel
 from openai import AsyncOpenAI

@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Realtime Transcription & Visualizer</title>
+    <title>AI面接練習</title>
     <style>
       /* 全体のレイアウト設定 */
       body {
@@ -99,14 +99,39 @@
         }
       }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
   </head>
   <body>
-    <div class="controls">
-      <h1 style="color: white; font-size: 16px; margin: 0 0 10px 0">
-        AI Conversation
-      </h1>
-      <button id="startBtn">Start Recording</button>
-      <button id="stopBtn" disabled>Stop</button>
+    <div
+      class="controls flex flex-col text-white space-y-4 p-4 bg-gray-800 rounded-xl w-64"
+    >
+      <h1 class="text-white text-lg font-semibold">AI面接練習</h1>
+
+      <!-- ボタン -->
+      <div class="flex gap-3">
+        <button
+          id="startBtn"
+          class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow disabled:bg-gray-500 disabled:cursor-not-allowed disabled:hover:bg-gray-500"
+        >
+          Start
+        </button>
+        <button
+          disabled
+          id="stopBtn"
+          class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg shadow disabled:bg-gray-500 disabled:cursor-not-allowed disabled:hover:bg-gray-500"
+        >
+          Stop
+        </button>
+      </div>
+
+      <!-- ファイル選択 -->
+      <label class="block">
+        <span class="text-gray-300 text-sm mb-1">履歴書を選択</span>
+        <input
+          type="file"
+          class="mt-1 block w-full text-sm text-gray-300 border border-gray-600 rounded-lg cursor-pointer bg-gray-700 file:bg-blue-100 file:text-blue-700 file:font-semibold file:border-0 file:px-4 file:py-2 file:mr-4 hover:file:bg-blue-200"
+        />
+      </label>
     </div>
 
     <div id="sphere"></div>

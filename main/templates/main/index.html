@@ -1,62 +1,51 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
   <head>
-    <title>AI面接練習</title>
+    <meta charset="UTF-8" />
+    <title>AI面接練習 - Home</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <style>
-      /* 全体のレイアウト設定 */
       body {
         margin: 0;
-        padding: 0;
-        width: 100vw;
-        height: 100vh;
-        background-color: #1a1a1a; /* 暗い背景 */
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        overflow: hidden;
+        background-color: #1a1a1a;
         font-family: sans-serif;
+        overflow: hidden;
+        color: white;
       }
 
-      /* 操作ボタンのコンテナ（左上に配置） */
-      .controls {
-        position: absolute;
-        top: 20px;
-        left: 20px;
-        z-index: 100;
-        background: rgba(0, 0, 0, 0.5);
-        padding: 10px;
-        border-radius: 8px;
+      /* 画面切り替えアニメーション用 */
+      .fade-out {
+        opacity: 0;
+        transition: opacity 0.5s ease-out;
+        pointer-events: none;
+      }
+      .fade-in {
+        opacity: 1;
+        transition: opacity 0.5s ease-in;
       }
 
-      button {
-        padding: 8px 16px;
-        cursor: pointer;
-        font-size: 14px;
-      }
-
-      /* 音に反応する球体 */
+      /* 面接画面の球体 */
       #sphere {
         width: 150px;
         height: 150px;
         background: linear-gradient(135deg, #00d2ff 0%, #3a7bd5 100%);
         border-radius: 50%;
         box-shadow: 0 0 30px rgba(0, 210, 255, 0.6);
-        transition: transform 0.05s ease-out; /* 滑らかに動かす */
+        transition: transform 0.05s ease-out;
         will-change: transform;
       }
 
-      /* 字幕エリア全体 */
+      /* 字幕エリア */
       #transcription {
         position: absolute;
         bottom: 10%;
         width: 80%;
         text-align: center;
-        font-size: 1.5rem; /* 少し小さくして複数行見やすく */
+        font-size: 1.5rem;
         font-weight: bold;
-        text-shadow: 2px 2px 4px #000000, 0 0 10px rgba(0, 0, 0, 0.8);
+        text-shadow: 2px 2px 4px #000, 0 0 10px rgba(0, 0, 0, 0.8);
         pointer-events: none;
-        line-height: 1.5;
-        max-height: 40vh; /* 表示エリアを広げる */
+        max-height: 40vh;
         overflow: hidden;
         display: flex;
         flex-direction: column;
@@ -64,79 +53,137 @@
         align-items: center;
       }
 
-      /* 個別のメッセージスタイル */
       .message-row {
         margin: 5px 0;
         padding: 5px 15px;
         border-radius: 10px;
-        animation: fadeIn 0.3s ease-in;
+        animation: popIn 0.3s ease-in;
       }
+      .user-message { color: #ffffff; }
+      .ai-message { color: #ffeb3b; font-size: 1.1em; }
+      .error-message { color: #ff5252; }
 
-      /* ユーザーの発言（白） */
-      .user-message {
-        color: #ffffff;
-      }
-
-      /* AIの発言（黄色・少し強調） */
-      .ai-message {
-        color: #ffeb3b; /* 鮮やかな黄色 */
-        font-size: 1.1em; /* 少し大きく */
-      }
-
-      /* エラーメッセージ（赤） */
-      .error-message {
-        color: #ff5252;
-      }
-
-      @keyframes fadeIn {
-        from {
-          opacity: 0;
-          transform: translateY(10px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
+      @keyframes popIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
       }
     </style>
-    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
   </head>
-  <body>
-    <div
-      class="controls flex flex-col text-white space-y-4 p-4 bg-gray-800 rounded-xl w-64"
-    >
-      <h1 class="text-white text-lg font-semibold">AI面接練習</h1>
+  <body class="w-screen h-screen relative">
 
-      <!-- ボタン -->
-      <div class="flex gap-3">
+    <div id="homeScreen" class="absolute inset-0 flex flex-col justify-center items-center bg-gray-900 z-50 transition-opacity duration-500">
+      <div class="text-center space-y-8 max-w-lg px-6">
+        <div>
+          <h1 class="text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500 mb-2">
+            OINORI
+          </h1>
+          <p class="text-gray-400">リアルタイム音声対話による面接練習</p>
+        </div>
+
+        <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg">
+          <label class="block mb-2 text-sm font-medium text-gray-300">
+            事前に履歴書をアップロード (任意)
+          </label>
+          <input
+            id="resumeInput"
+            type="file"
+            class="block w-full text-sm text-gray-400
+              file:mr-4 file:py-2 file:px-4
+              file:rounded-full file:border-0
+              file:text-sm file:font-semibold
+              file:bg-blue-600 file:text-white
+              hover:file:bg-blue-700
+              cursor-pointer bg-gray-700 rounded-lg border border-gray-600 focus:outline-none"
+          />
+          <p class="text-xs text-gray-500 mt-2">
+            ※ PDF, Word, Text形式に対応。アップロードするとAIが内容を学習します。
+          </p>
+        </div>
+
+        <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg mt-4">
+          <label class="block mb-2 text-sm font-medium text-gray-300">
+            面接の難易度（面接官のタイプ）
+          </label>
+          <select
+            id="difficultySelect"
+            class="block w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="easy">EASY：親切で優しい面接官</option>
+            <option value="normal">NORMAL：一般的な面接官</option>
+            <option value="hard" selected>HARD：圧迫・お祈りモード</option>
+          </select>
+        </div>
+
         <button
-          id="startBtn"
-          class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow disabled:bg-gray-500 disabled:cursor-not-allowed disabled:hover:bg-gray-500"
+          id="enterBtn"
+          class="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold py-4 px-8 rounded-full shadow-lg transform transition hover:scale-105 text-xl mt-10"
         >
-          Start
-        </button>
-        <button
-          disabled
-          id="stopBtn"
-          class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg shadow disabled:bg-gray-500 disabled:cursor-not-allowed disabled:hover:bg-gray-500"
-        >
-          Stop
+          面接会場へ入る
         </button>
       </div>
-
-      <!-- ファイル選択 -->
-      <label class="block">
-        <span class="text-gray-300 text-sm mb-1">履歴書を選択</span>
-        <input
-          type="file"
-          class="mt-1 block w-full text-sm text-gray-300 border border-gray-600 rounded-lg cursor-pointer bg-gray-700 file:bg-blue-100 file:text-blue-700 file:font-semibold file:border-0 file:px-4 file:py-2 file:mr-4 hover:file:bg-blue-200"
-        />
-      </label>
     </div>
 
-    <div id="sphere"></div>
+    <div id="interviewScreen" class="hidden absolute inset-0 flex justify-center items-center bg-[#1a1a1a]">
+      
+      <div class="absolute top-5 left-5 z-10 bg-black/50 p-4 rounded-lg backdrop-blur-sm border border-white/10 w-64">
+        <h2 class="text-white text-sm font-bold mb-3 border-b border-gray-600 pb-2">コントロール</h2>
+        <div class="flex gap-2">
+          <button
+            id="startBtn"
+            class="flex-1 bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-3 rounded text-sm transition"
+          >
+            会話開始
+          </button>
+          <button
+            id="stopBtn"
+            disabled
+            class="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-3 rounded text-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            終了
+          </button>
+        </div>
+        <div id="statusText" class="text-xs text-gray-400 mt-2">待機中...</div>
+      </div>
+      <div id="sphere"></div>
 
-    <div id="transcription"></div>
+      <div id="transcription"></div>
+    </div>
+
+    <div id="resultScreen" class="hidden absolute inset-0 flex flex-col justify-center items-center bg-gray-900 z-50 overflow-y-auto py-10">
+      <div class="bg-gray-800 p-8 rounded-2xl shadow-2xl max-w-2xl w-full border border-gray-700">
+        <h2 class="text-3xl font-bold text-center text-white mb-6">面接結果</h2>
+        
+        <div class="flex justify-center mb-8">
+          <div class="relative w-40 h-40 flex items-center justify-center rounded-full border-8 border-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.5)]">
+            <span id="scoreText" class="text-5xl font-bold text-white">--</span>
+            <span class="absolute bottom-8 text-sm text-gray-400">点</span>
+          </div>
+        </div>
+
+        <div class="space-y-6 text-left">
+          <div>
+            <h3 class="text-green-400 font-bold text-lg mb-2">👍 良かった点</h3>
+            <p id="goodPoints" class="text-gray-300 text-sm whitespace-pre-wrap leading-relaxed bg-gray-700/50 p-3 rounded"></p>
+          </div>
+          
+          <div>
+            <h3 class="text-red-400 font-bold text-lg mb-2">🤔 改善点</h3>
+            <p id="badPoints" class="text-gray-300 text-sm whitespace-pre-wrap leading-relaxed bg-gray-700/50 p-3 rounded"></p>
+          </div>
+
+          <div>
+            <h3 class="text-blue-400 font-bold text-lg mb-2">💡 総評アドバイス</h3>
+            <p id="adviceText" class="text-gray-300 text-sm whitespace-pre-wrap leading-relaxed bg-gray-700/50 p-3 rounded"></p>
+          </div>
+        </div>
+
+        <div class="mt-8 text-center">
+          <button onclick="location.reload()" class="bg-white text-gray-900 hover:bg-gray-200 font-bold py-3 px-8 rounded-full shadow transition">
+            タイトルに戻る
+          </button>
+        </div>
+      </div>
+    </div>
 
     <script>
       let socket;
@@ -146,84 +193,172 @@
       let globalStream;
       let analyser;
       let animationId;
+      
+      // 履歴書データを一時保存する変数
+      let resumeData = null;
+
+      // DOM要素
+      const homeScreen = document.getElementById("homeScreen");
+      const interviewScreen = document.getElementById("interviewScreen");
+      const enterBtn = document.getElementById("enterBtn");
+      const resumeInput = document.getElementById("resumeInput");
+      const resultScreen = document.getElementById("resultScreen");
 
       const startBtn = document.getElementById("startBtn");
       const stopBtn = document.getElementById("stopBtn");
       const transcriptionDiv = document.getElementById("transcription");
       const sphere = document.getElementById("sphere");
+      const statusText = document.getElementById("statusText");
+      // --- 1. ホーム画面の処理 ---
+
+      // 履歴書が選択されたらメモリに読み込んでおく
+      resumeInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = function(event) {
+          resumeData = {
+            type: "resume",
+            filename: file.name,
+            content: event.target.result // Base64
+          };
+          console.log("履歴書準備OK:", file.name);
+        };
+        reader.readAsDataURL(file);
+      });
+
+      // 「面接会場へ入る」ボタンクリック時の遷移
+      enterBtn.onclick = () => {
+        // フェードアウト
+        homeScreen.classList.add("opacity-0");
+        
+        // アニメーション後に画面切り替え
+        setTimeout(() => {
+          homeScreen.style.display = "none";
+          interviewScreen.classList.remove("hidden");
+          // 少し待ってからフェードインっぽく見せる（今回は即表示）
+        }, 500);
+      };
 
       startBtn.onclick = async () => {
-        // WebSocket接続
-        socket = new WebSocket(
-          "ws://" + window.location.host + "/ws/transcribe/"
-        );
+        // 1. WebSocket接続を作成
+        socket = new WebSocket("ws://" + window.location.host + "/ws/transcribe/");
 
+        // 2. 接続時の処理
         socket.onopen = async () => {
+          statusText.innerText = "接続完了";
           console.log("WebSocket Connected");
+          
+          const difficulty = document.getElementById("difficultySelect").value;
+          const initData = {
+            type: "config", // 設定送信用のタイプ
+            difficulty: difficulty,
+            resume: (typeof resumeData !== 'undefined') ? resumeData : null
+          };
+          socket.send(JSON.stringify(initData));
+          // 履歴書があれば送信
+          let msg = `難易度: ${difficulty.toUpperCase()} で開始します`;
+          if (initData.resume) msg += ` (履歴書あり)`;
+          addMessage("system", msg);
+
           startRecording();
         };
 
+        // 3. ★ここに「全ての受信処理」をまとめます（外に出してはいけません）
         socket.onmessage = (e) => {
           const data = JSON.parse(e.data);
+          console.log("受信データ:", data); // デバッグ用
 
-          // --- 音声データの受信処理 (追加) ---
+          // (A) 音声再生
           if (data.type === "audio") {
-            // Base64文字列から音声を再生
             const audio = new Audio("data:audio/mp3;base64," + data.audio);
             audio.play().catch((e) => console.error("再生エラー:", e));
-            return; // 音声のみの場合はここで終了
-          }
-          // ------------------------------
-
-          const div = document.createElement("div");
-          div.classList.add("message-row");
-          div.innerText = data.message;
-
-          if (data.type === "ai") {
-            div.classList.add("ai-message");
-          } else if (data.type === "error") {
-            div.classList.add("error-message");
-          } else {
-            div.classList.add("user-message");
+            return;
           }
 
-          transcriptionDiv.appendChild(div);
+          // (B) リザルト画面への遷移
+          if (data.type === "evaluation_result") {
+            const result = data.data;
 
-          if (transcriptionDiv.childElementCount > 6) {
-            transcriptionDiv.removeChild(transcriptionDiv.firstChild);
+            // 画面の値を更新
+            document.getElementById("scoreText").innerText = result.score;
+            document.getElementById("goodPoints").innerText = result.good_points;
+            document.getElementById("badPoints").innerText = result.bad_points;
+            document.getElementById("adviceText").innerText = result.advice;
+
+            // 画面切り替え
+            interviewScreen.style.display = "none";
+            resultScreen.classList.remove("hidden");
+            
+            // ソケットを切断
+            socket.close();
+            return;
           }
+
+          // (C) 通常のチャット表示
+          addMessage(data.type, data.message);
         };
+        
+        // 4. 切断時の処理
+        socket.onclose = () => {
+            statusText.innerText = "切断されました";
+        }
       };
-
+      
+      // Stopボタンの処理はそのまま外にあってOK
       stopBtn.onclick = () => {
         stopRecording();
-        if (socket) socket.close();
+        statusText.innerText = "AIが評価を作成中...";
+        
+        if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ type: "finish" }));
+        }
       };
+
+      function addMessage(type, text) {
+        const div = document.createElement("div");
+        div.classList.add("message-row");
+        div.innerText = text;
+
+        if (type === "ai") div.classList.add("ai-message");
+        else if (type === "error") div.classList.add("error-message");
+        else if (type === "system") div.classList.add("text-gray-400", "text-sm"); // システムメッセージ用
+        else div.classList.add("user-message");
+
+        transcriptionDiv.appendChild(div);
+
+        // 自動スクロール
+        if (transcriptionDiv.childElementCount > 6) {
+           transcriptionDiv.removeChild(transcriptionDiv.firstChild);
+        }
+      }
 
       async function startRecording() {
         startBtn.disabled = true;
         stopBtn.disabled = false;
-        transcriptionDiv.innerHTML = "";
+        statusText.innerText = "録音中...";
+        transcriptionDiv.innerHTML = ""; // 画面クリア
 
         audioContext = new (window.AudioContext || window.webkitAudioContext)({
           sampleRate: 16000,
         });
 
         try {
-          globalStream = await navigator.mediaDevices.getUserMedia({
-            audio: true,
-          });
+          globalStream = await navigator.mediaDevices.getUserMedia({ audio: true });
           input = audioContext.createMediaStreamSource(globalStream);
 
+          // ビジュアライザー用
           analyser = audioContext.createAnalyser();
           analyser.fftSize = 256;
           input.connect(analyser);
-
           visualize();
 
+          // 録音プロセッサ
           processor = audioContext.createScriptProcessor(4096, 1, 1);
           input.connect(processor);
 
+          // ハウリング防止
           const muteNode = audioContext.createGain();
           muteNode.gain.value = 0;
           processor.connect(muteNode);
@@ -237,35 +372,31 @@
           };
         } catch (e) {
           console.error(e);
-          alert("マイクへのアクセスが拒否されました");
+          alert("マイク許可が必要です");
+          statusText.innerText = "マイクエラー";
+          startBtn.disabled = false;
         }
       }
 
       function visualize() {
         if (!analyser) return;
-
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
         analyser.getByteFrequencyData(dataArray);
 
         let sum = 0;
-        for (let i = 0; i < dataArray.length; i++) {
-          sum += dataArray[i];
-        }
+        for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
         const average = sum / dataArray.length;
-
         const scale = 1 + average * 0.02;
 
         sphere.style.transform = `scale(${scale})`;
-
         animationId = requestAnimationFrame(visualize);
       }
 
       function stopRecording() {
         startBtn.disabled = false;
         stopBtn.disabled = true;
-
-        if (globalStream)
-          globalStream.getTracks().forEach((track) => track.stop());
+        
+        if (globalStream) globalStream.getTracks().forEach((track) => track.stop());
         if (processor) processor.disconnect();
         if (analyser) analyser.disconnect();
         if (input) input.disconnect();

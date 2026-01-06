@@ -1,21 +1,23 @@
 import os
-
-from channels.routing import ProtocolTypeRouter
 from django.core.asgi import get_asgi_application
+
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+
+django_asgi_app = get_asgi_application()
+
+# 3. Djangoの準備ができてから、Channels関連をインポートします
+from channels.routing import ProtocolTypeRouter, URLRouter
 from channels.auth import AuthMiddlewareStack
-from channels.routing import URLRouter
 import main.routing
 
+application = ProtocolTypeRouter({
+    # HTTPリクエストは通常のDjangoアプリで処理
+    "http": django_asgi_app,
 
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
-
-application = ProtocolTypeRouter(
-    {
-        "http": get_asgi_application(),
-        "websocket": AuthMiddlewareStack(
-            URLRouter(
-                main.routing.websocket_urlpatterns
-            )
-        ),
-    }
-)
+    # WebSocketリクエストはChannelsで処理
+    "websocket": AuthMiddlewareStack(
+        URLRouter(
+            main.routing.websocket_urlpatterns
+        )
+    ),
+})

@@ -14,6 +14,7 @@ dependencies = [
     "faster-whisper>=1.2.1",
     "openai>=2.8.1",
     "pydub>=0.25.1",
+    "pypdf>=6.5.0",
     "sounddevice>=0.5.3",
     "soundfile>=0.13.1",
     "tts>=0.22.0",

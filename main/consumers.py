@@ -58,46 +58,117 @@ class TranscriptConsumer(AsyncWebsocketConsumer):
             except asyncio.CancelledError:
                 pass
 
+    async def send_initial_greeting(self):
+        try:
+            # ▼▼▼ 修正: 難易度に応じたキャラ設定を読み込む ▼▼▼
+            if self.difficulty == "hard":
+                system_instruction = "あなたは冷徹で威圧的な圧迫面接官です。敬語ですが冷たく、短い言葉で話します。"
+            elif self.difficulty == "easy":
+                system_instruction = "あなたは非常に優しく、親身な新人教育担当です。明るく元気よく話します。"
+            else:
+                system_instruction = "あなたは一般的な企業の採用担当者です。丁寧かつ事務的に話します。"
+
+            # ▼▼▼ 履歴書の内容があれば、それも考慮させる（任意） ▼▼▼
+            resume_context = ""
+            if self.resume_text:
+                resume_context = f"応募者の履歴書: {self.resume_text[:500]}..." 
+
+            response = await self.openai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": system_instruction}, # ★ここが重要
+                    *self.conversation_history,
+                    {
+                        "role": "user", 
+                        "content": (
+                            f"{resume_context}\n"
+                            "面接を開始してください。"
+                            "最初に役割に応じた挨拶をして、自己紹介をお願いする質問をしてください。"
+                            "必ず平文にして下さい(マークダウン記号は不要です)"
+                        ),
+                    },
+                ],
+                temperature=0.7, # 少し創造的にする
+            )
+            # ▲▲▲ 修正ここまで ▲▲▲
+
+            greeting = response.choices[0].message.content
+
+            print(f"=== OpenAI Greeting ===\n{greeting}\n=======================")
+
+            if not greeting or not greeting.strip():
+                print("Error: Empty greeting received.")
+                return
+
+            # 会話履歴に追加
+            self.conversation_history.append(
+                {"role": "assistant", "content": greeting}
+            )
+
+            # テキスト送信
+            await self.send(json.dumps({"type": "ai", "message": greeting}))
+
+            # 音声化
+            voice = "ja-JP-NanamiNeural"
+            tts = edge_tts.Communicate(greeting, voice, rate="+20%")
+
+            audio_bytes = b""
+            try:
+                async for chunk in tts.stream():
+                    if chunk["type"] == "audio":
+                        audio_bytes += chunk["data"]
+
+                if not audio_bytes:
+                    print("Warning: No audio data generated.")
+                    return
+
+                audio_base64 = base64.b64encode(audio_bytes).decode()
+                await self.send(
+                    json.dumps({"type": "audio", "audio": audio_base64})
+                )
+
+            except Exception as e:
+                print(f"EdgeTTS Error: {e}")
+
+        except Exception as e:
+            print(f"Error in send_initial_greeting: {e}")
+
     async def receive(self, text_data=None, bytes_data=None):
         if bytes_data:
-            # 既存の音声処理メソッドがある場合は呼び出し
-            # (ユーザー様のコードにあった process_audio を想定)
             if hasattr(self, 'process_audio'):
                 await self.process_audio(bytes_data)
             print("音声データ受信 (bytes)")
-            return  # ここで処理終了
+            return
 
-        # 2. 次にテキストデータ（JSONコマンド）のチェック
         if text_data:
             try:
                 data = json.loads(text_data)
                 msg_type = data.get("type")
 
-                # --- (A) 設定データ (config) & 難易度 ---
                 if msg_type == "config":
                     self.difficulty = data.get("difficulty", "normal")
                     print(f"難易度設定: {self.difficulty}")
 
-                    # 設定と一緒に履歴書が送られてきた場合
                     resume_data = data.get("resume")
                     if resume_data:
                         try:
-                            # フロントエンドから { filename: "...", content: "data:application/pdf;base64,..." } が来ると想定
-                            file_name = resume_data.get("fileName", "").lower() # 小文字にして比較しやすくする
+                            file_name = resume_data.get("fileName", "").lower()
                             file_content = resume_data.get("content", "")
-                            
-                            # Base64ヘッダー除去 ("data:application/pdf;base64," 等)
+
                             if "," in file_content:
-                                header, encoded = file_content.split(",", 1)
+                                _, encoded = file_content.split(",", 1)
                             else:
                                 encoded = file_content
 
                             # デコード
                             decoded_bytes = base64.b64decode(encoded)
                             file_stream = io.BytesIO(decoded_bytes)
+                            
+                            # 変数の初期化（これを忘れるとエラーになります）
+                            extracted_text = ""
 
+                            # ファイル形式による分岐
                             if file_name.endswith(".pdf"):
-                                # PDFの場合
                                 reader = PdfReader(file_stream)
                                 for page in reader.pages:
                                     extracted_text += page.extract_text() + "\n"
@@ -109,19 +180,30 @@ class TranscriptConsumer(AsyncWebsocketConsumer):
                                     extracted_text += para.text + "\n"
                                 print("Wordとして処理しました")
                             
-                        except Exception as e:
-                            print(f"PDF or Docx読み込みエラー: {e}")
-                            # 失敗した場合は、エラーにならないよう空文字か、生データを入れておく
-                            self.resume_text = ""
+                            else:
+                                try:
+                                    extracted_text = decoded_bytes.decode("utf-8")
+                                except:
+                                    extracted_text = "【読込不可のファイル形式】"
 
-                # --- (B) 履歴書単体アップロード (resume) ---
+                            if len(extracted_text) > 2000:
+                                extracted_text = extracted_text[:2000] + "\n...(省略)..."
+
+                            self.resume_text = extracted_text
+                            print(f"抽出文字数: {len(self.resume_text)}")
+
+                        except Exception as e:
+                            print(f"ファイル読み込みエラー: {e}")
+                            self.resume_text = ""
+                    
+                    await self.send_initial_greeting()
+                    return
+
                 elif msg_type == "resume":
-                    # 既存の履歴書処理メソッド呼び出し
                     if hasattr(self, 'handle_resume_upload'):
                         await self.handle_resume_upload(data)
                     return
 
-                # --- (C) 終了シグナル (finish) ---
                 elif msg_type == "finish":
                     await self.generate_evaluation()
                     return

@@ -2,14 +2,14 @@
 <html>
   <head>
     <title>AI面接練習</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <style>
-      /* 全体のレイアウト設定 */
       body {
         margin: 0;
         padding: 0;
         width: 100vw;
         height: 100vh;
-        background-color: #1a1a1a; /* 暗い背景 */
+        background-color: #1a1a1a;
         display: flex;
         justify-content: center;
         align-items: center;
@@ -17,73 +17,57 @@
         font-family: sans-serif;
       }
 
-      /* 操作ボタンのコンテナ（左上に配置） */
       .controls {
         position: absolute;
         top: 20px;
         left: 20px;
         z-index: 100;
-        background: rgba(0, 0, 0, 0.5);
-        padding: 10px;
-        border-radius: 8px;
+        background: rgba(31, 41, 55, 0.95);
+        backdrop-filter: blur(10px);
+        max-height: 90vh;
+        overflow-y: auto;
       }
 
-      button {
-        padding: 8px 16px;
-        cursor: pointer;
-        font-size: 14px;
-      }
-
-      /* 音に反応する球体 */
       #sphere {
         width: 150px;
         height: 150px;
         background: linear-gradient(135deg, #00d2ff 0%, #3a7bd5 100%);
         border-radius: 50%;
         box-shadow: 0 0 30px rgba(0, 210, 255, 0.6);
-        transition: transform 0.05s ease-out; /* 滑らかに動かす */
+        transition: transform 0.05s ease-out;
         will-change: transform;
       }
 
-      /* 字幕エリア全体 */
       #transcription {
         position: absolute;
-        bottom: 10%;
+        bottom: 8%;
         width: 80%;
         text-align: center;
-        font-size: 1.5rem; /* 少し小さくして複数行見やすく */
+        font-size: 1.2rem;
         font-weight: bold;
-        text-shadow: 2px 2px 4px #000000, 0 0 10px rgba(0, 0, 0, 0.8);
+        text-shadow: 2px 2px 4px #000000;
         pointer-events: none;
-        line-height: 1.5;
-        max-height: 40vh; /* 表示エリアを広げる */
-        overflow: hidden;
         display: flex;
         flex-direction: column;
         justify-content: flex-end;
         align-items: center;
       }
 
-      /* 個別のメッセージスタイル */
       .message-row {
         margin: 5px 0;
-        padding: 5px 15px;
-        border-radius: 10px;
+        padding: 8px 20px;
+        border-radius: 15px;
         animation: fadeIn 0.3s ease-in;
+        background: rgba(0, 0, 0, 0.3);
       }
 
-      /* ユーザーの発言（白） */
       .user-message {
         color: #ffffff;
       }
-
-      /* AIの発言（黄色・少し強調） */
       .ai-message {
-        color: #ffeb3b; /* 鮮やかな黄色 */
-        font-size: 1.1em; /* 少し大きく */
+        color: #ffeb3b;
+        border: 1px solid rgba(255, 235, 59, 0.3);
       }
-
-      /* エラーメッセージ（赤） */
       .error-message {
         color: #ff5252;
       }
@@ -98,44 +82,84 @@
           transform: translateY(0);
         }
       }
+
+      /* スクロールバー隠し */
+      .controls::-webkit-scrollbar {
+        width: 5px;
+      }
+      .controls::-webkit-scrollbar-thumb {
+        background: #4b5563;
+        border-radius: 10px;
+      }
     </style>
-    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
   </head>
   <body>
     <div
-      class="controls flex flex-col text-white space-y-4 p-4 bg-gray-800 rounded-xl w-64"
+      class="controls flex flex-col text-white space-y-6 p-6 rounded-2xl w-80 shadow-2xl border border-gray-700"
     >
-      <h1 class="text-white text-lg font-semibold">AI面接練習</h1>
+      <div>
+        <h1
+          class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400"
+        >
+          AI面接練習
+        </h1>
+        <p class="text-xs text-gray-400 mt-1">
+          プロンプトと履歴書を設定して開始
+        </p>
+      </div>
 
-      <!-- ボタン -->
-      <div class="flex gap-3">
+      <div class="space-y-2">
+        <label class="block text-sm font-medium text-gray-300"
+          >面接の設定</label
+        >
+        <textarea
+          id="systemPrompt"
+          rows="4"
+          class="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+          placeholder="例：フロントエンドエンジニアの面接官として、技術的な質問を中心に行ってください。"
+        ></textarea>
+      </div>
+
+      <div class="space-y-2">
+        <label class="block text-sm font-medium text-gray-300"
+          >履歴書 (PDF形式)</label
+        >
+        <div class="relative">
+          <input type="file" id="resumeInput" accept=".pdf" class="hidden" />
+          <label
+            for="resumeInput"
+            id="fileLabel"
+            class="flex items-center justify-center w-full px-4 py-2 bg-gray-700 border-2 border-dashed border-gray-500 rounded-lg cursor-pointer hover:border-blue-500 hover:bg-gray-600 transition-all text-sm"
+          >
+            ファイルを展開
+          </label>
+        </div>
+        <p
+          id="fileNameDisplay"
+          class="text-xs text-emerald-400 italic mt-1 hidden"
+        >
+          ✓ 選択済み
+        </p>
+      </div>
+
+      <div class="flex flex-col gap-3 pt-2">
         <button
           id="startBtn"
-          class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow disabled:bg-gray-500 disabled:cursor-not-allowed disabled:hover:bg-gray-500"
+          class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl shadow-lg transition-all active:scale-95 disabled:bg-gray-600 disabled:opacity-50"
         >
-          Start
+          面接を開始する
         </button>
         <button
           disabled
           id="stopBtn"
-          class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg shadow disabled:bg-gray-500 disabled:cursor-not-allowed disabled:hover:bg-gray-500"
+          class="w-full bg-gray-700 hover:bg-red-600 text-white font-bold py-2 rounded-xl transition-all disabled:hidden"
         >
-          Stop
+          終了
         </button>
       </div>
-
-      <!-- ファイル選択 -->
-      <label class="block">
-        <span class="text-gray-300 text-sm mb-1">履歴書を選択</span>
-        <input
-          type="file"
-          class="mt-1 block w-full text-sm text-gray-300 border border-gray-600 rounded-lg cursor-pointer bg-gray-700 file:bg-blue-100 file:text-blue-700 file:font-semibold file:border-0 file:px-4 file:py-2 file:mr-4 hover:file:bg-blue-200"
-        />
-      </label>
     </div>
 
     <div id="sphere"></div>
-
     <div id="transcription"></div>
 
     <script>
@@ -146,34 +170,63 @@
       let globalStream;
       let analyser;
       let animationId;
+      let resumeText = ""; // 履歴書のテキストを保持
 
       const startBtn = document.getElementById("startBtn");
       const stopBtn = document.getElementById("stopBtn");
       const transcriptionDiv = document.getElementById("transcription");
       const sphere = document.getElementById("sphere");
+      const resumeInput = document.getElementById("resumeInput");
+      const fileLabel = document.getElementById("fileLabel");
+      const fileNameDisplay = document.getElementById("fileNameDisplay");
+      const systemPromptInput = document.getElementById("systemPrompt");
 
+      resumeInput.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          // PDFをBase64形式の文字列として取得
+          resumeText = event.target.result.split(",")[1]; // headerを除去
+          fileLabel.innerText = "変更する";
+          fileNameDisplay.innerText = `✓ PDF: ${file.name} を読み込みました`;
+          fileNameDisplay.classList.remove("hidden");
+        };
+        // readAsTextではなくreadAsDataURLを使う
+        reader.readAsDataURL(file);
+      };
       startBtn.onclick = async () => {
         // WebSocket接続
+        const protocol =
+          window.location.protocol === "https:" ? "wss://" : "ws://";
         socket = new WebSocket(
-          "ws://" + window.location.host + "/ws/transcribe/"
+          protocol + window.location.host + "/ws/transcribe/"
         );
 
         socket.onopen = async () => {
           console.log("WebSocket Connected");
+
+          // --- 初期設定メッセージの送信 ---
+          // サーバー側でこれを受け取ってLLMのSystem Roleに設定する想定
+          const config = {
+            type: "config",
+            prompt: systemPromptInput.value,
+            resume: resumeText,
+          };
+          socket.send(JSON.stringify(config));
+
           startRecording();
         };
 
         socket.onmessage = (e) => {
           const data = JSON.parse(e.data);
 
-          // --- 音声データの受信処理 (追加) ---
           if (data.type === "audio") {
-            // Base64文字列から音声を再生
             const audio = new Audio("data:audio/mp3;base64," + data.audio);
             audio.play().catch((e) => console.error("再生エラー:", e));
-            return; // 音声のみの場合はここで終了
+            return;
           }
-          // ------------------------------
 
           const div = document.createElement("div");
           div.classList.add("message-row");
@@ -188,8 +241,7 @@
           }
 
           transcriptionDiv.appendChild(div);
-
-          if (transcriptionDiv.childElementCount > 6) {
+          if (transcriptionDiv.childElementCount > 4) {
             transcriptionDiv.removeChild(transcriptionDiv.firstChild);
           }
         };
@@ -232,6 +284,7 @@
           processor.onaudioprocess = (e) => {
             const inputData = e.inputBuffer.getChannelData(0);
             if (socket && socket.readyState === WebSocket.OPEN) {
+              // 音声バイナリデータを送信
               socket.send(inputData.buffer);
             }
           };
@@ -243,7 +296,6 @@
 
       function visualize() {
         if (!analyser) return;
-
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
         analyser.getByteFrequencyData(dataArray);
 
@@ -252,11 +304,8 @@
           sum += dataArray[i];
         }
         const average = sum / dataArray.length;
-
-        const scale = 1 + average * 0.02;
-
+        const scale = 1 + average * 0.015;
         sphere.style.transform = `scale(${scale})`;
-
         animationId = requestAnimationFrame(visualize);
       }
 

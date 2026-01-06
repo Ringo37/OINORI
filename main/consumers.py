@@ -93,7 +93,7 @@ class TranscriptConsumer(AsyncWebsocketConsumer):
 
             # 音声化
             voice = "ja-JP-NanamiNeural"
-            tts = edge_tts.Communicate(greeting, voice)
+            tts = edge_tts.Communicate(greeting, voice, rate="+20%")
 
             audio_bytes = b""
             try:
@@ -242,7 +242,7 @@ class TranscriptConsumer(AsyncWebsocketConsumer):
 
         # --- TTS ---
         voice = "ja-JP-NanamiNeural"
-        tts = edge_tts.Communicate(ai_message, voice)
+        tts = edge_tts.Communicate(ai_message, voice, rate="+20%")
 
         audio_bytes = b""
         async for chunk in tts.stream():

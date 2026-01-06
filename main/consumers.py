@@ -6,6 +6,7 @@ import base64
 import edge_tts
 import io
 from pypdf import PdfReader
+import docx
 from channels.generic.websocket import AsyncWebsocketConsumer
 from faster_whisper import WhisperModel
 from openai import AsyncOpenAI
@@ -82,30 +83,34 @@ class TranscriptConsumer(AsyncWebsocketConsumer):
                     if resume_data:
                         try:
                             # フロントエンドから { filename: "...", content: "data:application/pdf;base64,..." } が来ると想定
+                            file_name = resume_data.get("fileName", "").lower() # 小文字にして比較しやすくする
                             file_content = resume_data.get("content", "")
                             
-                            # "data:application/pdf;base64," のようなヘッダーがついている場合、除去する
+                            # Base64ヘッダー除去 ("data:application/pdf;base64," 等)
                             if "," in file_content:
                                 header, encoded = file_content.split(",", 1)
                             else:
                                 encoded = file_content
 
-                            # Base64をデコードしてバイナリにする
+                            # デコード
                             decoded_bytes = base64.b64decode(encoded)
-                            
-                            # バイナリをメモリ上のファイルとして扱い、PDFリーダーで開く
-                            reader = PdfReader(io.BytesIO(decoded_bytes))
-                            
-                            # 全ページの文字を抽出して結合
-                            extracted_text = ""
-                            for page in reader.pages:
-                                extracted_text += page.extract_text() + "\n"
-                            
-                            self.resume_text = extracted_text
-                            print(f"PDFから抽出した文字数: {len(self.resume_text)}")
+                            file_stream = io.BytesIO(decoded_bytes)
+
+                            if file_name.endswith(".pdf"):
+                                # PDFの場合
+                                reader = PdfReader(file_stream)
+                                for page in reader.pages:
+                                    extracted_text += page.extract_text() + "\n"
+                                print("PDFとして処理しました")
+
+                            elif file_name.endswith(".docx"):
+                                doc = docx.Document(file_stream)
+                                for para in doc.paragraphs:
+                                    extracted_text += para.text + "\n"
+                                print("Wordとして処理しました")
                             
                         except Exception as e:
-                            print(f"PDF読み込みエラー: {e}")
+                            print(f"PDF or Docx読み込みエラー: {e}")
                             # 失敗した場合は、エラーにならないよう空文字か、生データを入れておく
                             self.resume_text = ""
 

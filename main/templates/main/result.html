@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>AI面接 - Result</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <style>
+    body { margin: 0; background-color: #111827; font-family: sans-serif; color: white; }
+  </style>
+</head>
+<body class="w-screen h-screen flex flex-col justify-center items-center overflow-y-auto py-10">
+
+  <div class="bg-gray-800 p-8 rounded-2xl shadow-2xl max-w-2xl w-full border border-gray-700">
+    <h2 class="text-3xl font-bold text-center text-white mb-6">面接結果</h2>
+    
+    <div class="flex justify-center mb-8">
+      <div class="relative w-40 h-40 flex items-center justify-center rounded-full border-8 border-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.5)]">
+        <span id="scoreText" class="text-5xl font-bold text-white">--</span>
+        <span class="absolute bottom-8 text-sm text-gray-400">点</span>
+      </div>
+    </div>
+
+    <div class="space-y-6 text-left">
+      <div>
+        <h3 class="text-green-400 font-bold text-lg mb-2">👍 良かった点</h3>
+        <p id="goodPoints" class="text-gray-300 text-sm whitespace-pre-wrap leading-relaxed bg-gray-700/50 p-3 rounded">読み込み中...</p>
+      </div>
+      
+      <div>
+        <h3 class="text-red-400 font-bold text-lg mb-2">🤔 改善点</h3>
+        <p id="badPoints" class="text-gray-300 text-sm whitespace-pre-wrap leading-relaxed bg-gray-700/50 p-3 rounded">読み込み中...</p>
+      </div>
+
+      <div>
+        <h3 class="text-blue-400 font-bold text-lg mb-2">💡 総評アドバイス</h3>
+        <p id="adviceText" class="text-gray-300 text-sm whitespace-pre-wrap leading-relaxed bg-gray-700/50 p-3 rounded">読み込み中...</p>
+      </div>
+    </div>
+
+    <div class="mt-8 flex justify-center gap-4">
+      <a href="/" class="bg-white text-gray-900 hover:bg-gray-200 font-bold py-3 px-8 rounded-full shadow transition text-decoration-none">
+        タイトルに戻る
+      </a>
+      <a href="{% url 'history_list' %}" class="bg-transparent border-2 border-blue-500 text-blue-400 hover:bg-blue-500/10 hover:text-blue-300 font-bold py-3 px-6 rounded-full shadow transition flex items-center gap-2 text-decoration-none">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zM3.75 12h.007v.008H3.75V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm-.375 5.25h.007v.008H3.75v-.008zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+        </svg>
+        履歴一覧へ
+      </a>
+    </div>
+  </div>
+
+  <script>
+    window.onload = () => {
+      const resultJson = sessionStorage.getItem('interviewResult');
+      
+      if (!resultJson) {
+        document.getElementById("adviceText").innerText = "結果データが見つかりません。もう一度面接を行ってください。";
+        return;
+      }
+
+      const result = JSON.parse(resultJson);
+
+      document.getElementById("scoreText").innerText = result.score;
+      document.getElementById("goodPoints").innerText = result.good_points;
+      document.getElementById("badPoints").innerText = result.bad_points;
+      document.getElementById("adviceText").innerText = result.advice;
+    };
+  </script>
+</body>
+</html>

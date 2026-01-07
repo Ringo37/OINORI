@@ -19,8 +19,10 @@ from django.contrib import admin
 from django.urls import path
 from main import views as main_views
 
-
 urlpatterns = [
-    path("admin/", admin.site.urls),
-    path("", main_views.index, name="index"),
+    path('', main_views.index, name='index'),
+    path('history/', main_views.history_list, name='history_list'),
+    path('history/<int:pk>/', main_views.history_detail, name='history_detail'),
+    path('interview/', main_views.interview, name='interview'),
+    path('result/', main_views.result, name='result'),
 ]

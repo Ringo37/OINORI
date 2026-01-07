@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>AI面接 - Interview</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <style>
+    body { margin: 0; background-color: #1a1a1a; overflow: hidden; color: white; font-family: sans-serif; }
+    #sphere {
+      width: 150px; height: 150px;
+      background: linear-gradient(135deg, #00d2ff 0%, #3a7bd5 100%);
+      border-radius: 50%;
+      box-shadow: 0 0 30px rgba(0, 210, 255, 0.6);
+      transition: transform 0.05s ease-out; will-change: transform;
+    }
+    #transcription {
+      position: absolute; bottom: 10%; width: 80%; text-align: center;
+      font-size: 1.5rem; font-weight: bold;
+      text-shadow: 2px 2px 4px #000; pointer-events: none;
+      max-height: 40vh; overflow: hidden;
+      display: flex; flex-direction: column; justify-content: flex-end; align-items: center;
+    }
+    .message-row { margin: 5px 0; padding: 5px 15px; border-radius: 10px; animation: popIn 0.3s ease-in; }
+    .user-message { color: #ffffff; }
+    .ai-message { color: #ffeb3b; font-size: 1.1em; }
+    .error-message { color: #ff5252; }
+    @keyframes popIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  </style>
+</head>
+<body class="w-screen h-screen relative flex justify-center items-center">
+
+  <div class="absolute top-5 left-5 z-10 bg-black/50 p-4 rounded-lg backdrop-blur-sm border border-white/10 w-64">
+    <h2 class="text-white text-sm font-bold mb-3 border-b border-gray-600 pb-2">コントロール</h2>
+    <div class="flex gap-2">
+      <button id="startBtn" class="flex-1 bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-3 rounded text-sm transition">
+        会話開始
+      </button>
+      <button id="stopBtn" disabled class="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-3 rounded text-sm transition disabled:opacity-50 disabled:cursor-not-allowed">
+        終了
+      </button>
+    </div>
+    <div id="statusText" class="text-xs text-gray-400 mt-2">待機中...</div>
+  </div>
+
+  <div id="sphere"></div>
+  <div id="transcription"></div>
+
+  <script>
+    // --- 初期化: Homeから渡された設定を読み込む ---
+    const configData = JSON.parse(sessionStorage.getItem('interviewConfig'));
+    if (!configData) {
+      alert("設定が見つかりません。ホームに戻ります。");
+      window.location.href = "/"; // ホームへリダイレクト
+    }
+
+    let socket, audioContext, processor, input, globalStream, analyser, animationId;
+    let isAiSpeaking = false;
+    const audioPlayer = new Audio();
+    
+    const startBtn = document.getElementById("startBtn");
+    const stopBtn = document.getElementById("stopBtn");
+    const statusText = document.getElementById("statusText");
+    const transcriptionDiv = document.getElementById("transcription");
+    const sphere = document.getElementById("sphere");
+
+    function updateStatus(text) { statusText.innerText = text; }
+
+    // --- WebSocket & 録音制御 ---
+    startBtn.onclick = async () => {
+      socket = new WebSocket("ws://" + window.location.host + "/ws/transcribe/");
+      
+      socket.onopen = async () => {
+        updateStatus("接続完了");
+        // 設定データを送信
+        const initData = {
+          type: "config",
+          difficulty: configData.difficulty,
+          gender: configData.gender,
+          resume: configData.resume
+        };
+        socket.send(JSON.stringify(initData));
+        
+        let msg = `難易度: ${configData.difficulty.toUpperCase()} で開始します`;
+        if (initData.resume) msg += ` (履歴書あり)`;
+        addMessage("system", msg);
+
+        await startRecording();
+        isAiSpeaking = true; 
+        updateStatus("面接官が入室しています... (待機中)");
+      };
+
+      socket.onmessage = (e) => {
+        const data = JSON.parse(e.data);
+
+        if (data.type === "audio") {
+          playAiResponse(data.audio);
+          return;
+        }
+
+        if (data.type === "evaluation_result") {
+          // ★結果を受信したらsessionStorageに保存して遷移
+          sessionStorage.setItem('interviewResult', JSON.stringify(data.data));
+          
+          stopRecording(); // 念のため停止
+          socket.close();
+          window.location.href = "/result/"; // 結果ページへ
+          return;
+        }
+
+        addMessage(data.type, data.message);
+      };
+      
+      socket.onclose = () => { updateStatus("切断されました"); }
+    };
+
+    stopBtn.onclick = () => {
+      stopRecording();
+      updateStatus("AIが評価を作成中...");
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: "finish" }));
+      }
+    };
+
+    // --- 音声関連ロジック ---
+    function playAiResponse(base64Audio) {
+      audioPlayer.src = "data:audio/mp3;base64," + base64Audio;
+      isAiSpeaking = true;
+      updateStatus("面接官が話しています...");
+      audioPlayer.play().catch(e => console.error(e));
+      audioPlayer.onended = () => {
+        isAiSpeaking = false;
+        updateStatus("あなたの番です (録音中)");
+      };
+    }
+
+    function sendAudioChunk(audioData) {
+      if (isAiSpeaking) return;
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(audioData);
+      }
+    }
+
+    async function startRecording() {
+      startBtn.disabled = true; stopBtn.disabled = false;
+      updateStatus("録音中...");
+      transcriptionDiv.innerHTML = ""; 
+      
+      audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+      try {
+        globalStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        input = audioContext.createMediaStreamSource(globalStream);
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 256;
+        input.connect(analyser);
+        visualize();
+
+        processor = audioContext.createScriptProcessor(4096, 1, 1);
+        input.connect(processor);
+        
+        const muteNode = audioContext.createGain();
+        muteNode.gain.value = 0;
+        processor.connect(muteNode);
+        muteNode.connect(audioContext.destination);
+
+        processor.onaudioprocess = (e) => {
+          sendAudioChunk(e.inputBuffer.getChannelData(0).buffer);
+        };
+      } catch (e) {
+        console.error(e);
+        alert("マイク許可が必要です");
+        startBtn.disabled = false;
+      }
+    }
+
+    function stopRecording() {
+      startBtn.disabled = false; stopBtn.disabled = true;
+      if (globalStream) globalStream.getTracks().forEach((track) => track.stop());
+      if (processor) processor.disconnect();
+      if (analyser) analyser.disconnect();
+      if (input) input.disconnect();
+      if (audioContext) audioContext.close();
+      if (animationId) cancelAnimationFrame(animationId);
+      sphere.style.transform = "scale(1)";
+    }
+
+    // --- UI/Visual ---
+    function addMessage(type, text) {
+      const div = document.createElement("div");
+      div.classList.add("message-row");
+      div.innerText = text;
+      if (type === "ai") div.classList.add("ai-message");
+      else if (type === "error") div.classList.add("error-message");
+      else if (type === "system") div.classList.add("text-gray-400", "text-sm");
+      else div.classList.add("user-message");
+      transcriptionDiv.appendChild(div);
+      if (transcriptionDiv.childElementCount > 6) transcriptionDiv.removeChild(transcriptionDiv.firstChild);
+    }
+
+    function visualize() {
+      if (!analyser) return;
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      analyser.getByteFrequencyData(dataArray);
+      let sum = 0;
+      for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+      const scale = 1 + (sum / dataArray.length) * 0.02;
+      sphere.style.transform = `scale(${scale})`;
+      animationId = requestAnimationFrame(visualize);
+    }
+  </script>
+</body>
+</html>

@@ -26,6 +26,8 @@ class TranscriptConsumer(AsyncWebsocketConsumer):
         self.system_prompt = None 
         self.conversation_history = [] 
         self.tts_voice = "ja-JP-NanamiNeural"
+        self.difficulty = "normal"
+        self.gender = "female"
 
     async def connect(self):
         await self.accept()
@@ -200,8 +202,10 @@ class TranscriptConsumer(AsyncWebsocketConsumer):
             def save_record():
                 return InterviewSession.objects.create(
                     score=result_data.get("score", 0),
-                    feedback_text=result_json_str,
-                    conversation_log=self.conversation_history
+                    feedback_text=result_data,
+                    conversation_log=self.conversation_history,
+                    difficulty=self.difficulty,
+                    gender=self.gender
                 )
             await save_record()
 
@@ -231,10 +235,10 @@ class TranscriptConsumer(AsyncWebsocketConsumer):
                 msg_type = data.get("type")
 
                 if msg_type == "config":
-                    difficulty = data.get("difficulty", "normal")
-                    gender = data.get("gender", "female")
+                    self.difficulty = data.get("difficulty", "normal")
+                    self.gender = data.get("gender", "female")
 
-                    if gender == "male":
+                    if self.gender == "male":
                         self.tts_voice = "ja-JP-KeitaNeural"
                         print("設定: 男性面接官 (Keita)")
                     else:
@@ -247,7 +251,7 @@ class TranscriptConsumer(AsyncWebsocketConsumer):
                     else:
                         self.resume_text = ""
 
-                    self.system_prompt = get_system_prompt(difficulty, self.resume_text, gender)
+                    self.system_prompt = get_system_prompt(self.difficulty, self.resume_text, self.gender)
                     
                     self.conversation_history = [] 
 

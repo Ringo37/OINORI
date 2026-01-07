@@ -194,6 +194,10 @@
       let analyser;
       let animationId;
       
+      // ★追加: AIの発話状態管理
+      let isAiSpeaking = false;
+      const audioPlayer = new Audio(); 
+
       // 履歴書データを一時保存する変数
       let resumeData = null;
 
@@ -209,6 +213,12 @@
       const transcriptionDiv = document.getElementById("transcription");
       const sphere = document.getElementById("sphere");
       const statusText = document.getElementById("statusText");
+
+      // --- ヘルパー関数: ステータス表示 ---
+      function updateStatus(text) {
+          statusText.innerText = text;
+      }
+
       // --- 1. ホーム画面の処理 ---
 
       // 履歴書が選択されたらメモリに読み込んでおく
@@ -220,7 +230,7 @@
         reader.onload = function(event) {
           resumeData = {
             type: "resume",
-            filename: file.name,
+            fileName: file.name, // 修正済み: fileName (大文字N)
             content: event.target.result // Base64
           };
           console.log("履歴書準備OK:", file.name);
@@ -230,34 +240,29 @@
 
       // 「面接会場へ入る」ボタンクリック時の遷移
       enterBtn.onclick = () => {
-        // フェードアウト
         homeScreen.classList.add("opacity-0");
-        
-        // アニメーション後に画面切り替え
         setTimeout(() => {
           homeScreen.style.display = "none";
           interviewScreen.classList.remove("hidden");
-          // 少し待ってからフェードインっぽく見せる（今回は即表示）
         }, 500);
       };
 
       startBtn.onclick = async () => {
-        // 1. WebSocket接続を作成
+        // WebSocket接続を作成
         socket = new WebSocket("ws://" + window.location.host + "/ws/transcribe/");
 
-        // 2. 接続時の処理
         socket.onopen = async () => {
-          statusText.innerText = "接続完了";
+          updateStatus("接続完了");
           console.log("WebSocket Connected");
           
           const difficulty = document.getElementById("difficultySelect").value;
           const initData = {
-            type: "config", // 設定送信用のタイプ
+            type: "config",
             difficulty: difficulty,
             resume: (typeof resumeData !== 'undefined') ? resumeData : null
           };
           socket.send(JSON.stringify(initData));
-          // 履歴書があれば送信
+          
           let msg = `難易度: ${difficulty.toUpperCase()} で開始します`;
           if (initData.resume) msg += ` (履歴書あり)`;
           addMessage("system", msg);
@@ -265,56 +270,81 @@
           startRecording();
         };
 
-        // 3. ★ここに「全ての受信処理」をまとめます（外に出してはいけません）
+        // --- 受信処理 ---
         socket.onmessage = (e) => {
           const data = JSON.parse(e.data);
-          console.log("受信データ:", data); // デバッグ用
 
           // (A) 音声再生
           if (data.type === "audio") {
-            const audio = new Audio("data:audio/mp3;base64," + data.audio);
-            audio.play().catch((e) => console.error("再生エラー:", e));
+            // ★修正: 直接再生せず、制御関数を通す
+            playAiResponse(data.audio); 
             return;
           }
 
           // (B) リザルト画面への遷移
           if (data.type === "evaluation_result") {
             const result = data.data;
-
-            // 画面の値を更新
             document.getElementById("scoreText").innerText = result.score;
             document.getElementById("goodPoints").innerText = result.good_points;
             document.getElementById("badPoints").innerText = result.bad_points;
             document.getElementById("adviceText").innerText = result.advice;
 
-            // 画面切り替え
             interviewScreen.style.display = "none";
             resultScreen.classList.remove("hidden");
             
-            // ソケットを切断
             socket.close();
             return;
           }
 
-          // (C) 通常のチャット表示
+          // (C) テキストチャット表示
           addMessage(data.type, data.message);
         };
         
-        // 4. 切断時の処理
         socket.onclose = () => {
-            statusText.innerText = "切断されました";
+            updateStatus("切断されました");
         }
       };
       
-      // Stopボタンの処理はそのまま外にあってOK
       stopBtn.onclick = () => {
         stopRecording();
-        statusText.innerText = "AIが評価を作成中...";
+        updateStatus("AIが評価を作成中...");
         
         if (socket && socket.readyState === WebSocket.OPEN) {
             socket.send(JSON.stringify({ type: "finish" }));
         }
       };
+
+      // --- ★追加: AI音声再生とマイク制御のロジック ---
+      function playAiResponse(base64Audio) {
+          // 1. ソースを設定
+          audioPlayer.src = "data:audio/mp3;base64," + base64Audio;
+          
+          // 2. フラグをON（マイク送信停止）
+          isAiSpeaking = true;
+          updateStatus("面接官が話しています...");
+          
+          // 再生開始
+          audioPlayer.play().catch(e => console.error("再生エラー:", e));
+
+          // 3. 再生終了時にフラグをOFF（マイク送信再開）
+          audioPlayer.onended = () => {
+              isAiSpeaking = false;
+              updateStatus("あなたの番です (録音中)");
+          };
+      }
+
+      // --- ★追加: 音声データ送信のガード処理 ---
+      function sendAudioChunk(audioData) {
+          // AIが話しているときは送信しない（ここでブロック）
+          if (isAiSpeaking) {
+              return; 
+          }
+
+          // WebSocketが生きていれば送信
+          if (socket && socket.readyState === WebSocket.OPEN) {
+              socket.send(audioData);
+          }
+      }
 
       function addMessage(type, text) {
         const div = document.createElement("div");
@@ -323,12 +353,11 @@
 
         if (type === "ai") div.classList.add("ai-message");
         else if (type === "error") div.classList.add("error-message");
-        else if (type === "system") div.classList.add("text-gray-400", "text-sm"); // システムメッセージ用
+        else if (type === "system") div.classList.add("text-gray-400", "text-sm");
         else div.classList.add("user-message");
 
         transcriptionDiv.appendChild(div);
 
-        // 自動スクロール
         if (transcriptionDiv.childElementCount > 6) {
            transcriptionDiv.removeChild(transcriptionDiv.firstChild);
         }
@@ -337,8 +366,8 @@
       async function startRecording() {
         startBtn.disabled = true;
         stopBtn.disabled = false;
-        statusText.innerText = "録音中...";
-        transcriptionDiv.innerHTML = ""; // 画面クリア
+        updateStatus("録音中...");
+        transcriptionDiv.innerHTML = ""; 
 
         audioContext = new (window.AudioContext || window.webkitAudioContext)({
           sampleRate: 16000,
@@ -348,36 +377,34 @@
           globalStream = await navigator.mediaDevices.getUserMedia({ audio: true });
           input = audioContext.createMediaStreamSource(globalStream);
 
-          // ビジュアライザー用
           analyser = audioContext.createAnalyser();
           analyser.fftSize = 256;
           input.connect(analyser);
           visualize();
 
-          // 録音プロセッサ
           processor = audioContext.createScriptProcessor(4096, 1, 1);
           input.connect(processor);
 
-          // ハウリング防止
           const muteNode = audioContext.createGain();
           muteNode.gain.value = 0;
           processor.connect(muteNode);
           muteNode.connect(audioContext.destination);
 
+          // ★修正: プロセッサ内で直接送信せず、sendAudioChunk関数を呼ぶ
           processor.onaudioprocess = (e) => {
             const inputData = e.inputBuffer.getChannelData(0);
-            if (socket && socket.readyState === WebSocket.OPEN) {
-              socket.send(inputData.buffer);
-            }
+            sendAudioChunk(inputData.buffer); // ガード処理付き関数へ
           };
+
         } catch (e) {
           console.error(e);
           alert("マイク許可が必要です");
-          statusText.innerText = "マイクエラー";
+          updateStatus("マイクエラー");
           startBtn.disabled = false;
         }
       }
 
+      // --- ここから下が消えていた部分を復元 ---
       function visualize() {
         if (!analyser) return;
         const dataArray = new Uint8Array(analyser.frequencyBinCount);

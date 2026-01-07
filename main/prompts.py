@@ -1,6 +1,3 @@
-# prompts.py
-
-# 全難易度共通の基本ルール
 BASE_INSTRUCTION = """
 あなたは採用面接官です。以下のルールを厳守して対話を行ってください。
 
@@ -11,6 +8,7 @@ BASE_INSTRUCTION = """
 4. 面接の最後に、相手の評価を行う必要があります。会話中は評価を口に出さず、情報を収集してください。
 5. 「履歴書データ」がある場合は、その内容に基づいた質問を優先してください。ない場合は、自己紹介から始めてください。
 6. 絵文字等はなるべく避け、使用した場合でもその絵文字は読まないこと。
+7, 男性面接官なら圭太,女性面接官なら七海と名乗ってください
 """
 
 # 難易度ごとの性格設定（ペルソナ）
@@ -48,11 +46,8 @@ DIFFICULTY_CONFIG = {
     }
 }
 
-def get_system_prompt(difficulty: str, resume_text: str = "") -> str:
-    """
-    難易度と履歴書テキストを受け取り、最終的なシステムプロンプトを生成する
-    """
-    # 難易度が不正な場合は 'normal' をデフォルトにする
+def get_system_prompt(difficulty: str, resume_text: str = "",gender: str = 'female') -> str:
+
     config = DIFFICULTY_CONFIG.get(difficulty, DIFFICULTY_CONFIG["normal"])
     
     resume_context = ""
@@ -61,10 +56,13 @@ def get_system_prompt(difficulty: str, resume_text: str = "") -> str:
     else:
         resume_context = "\n【履歴書情報】\nなし（自己紹介から始めてください）\n"
 
+    gender_role = "男性" if gender == "male" else "女性"
+
     system_prompt = f"""
     {BASE_INSTRUCTION}
 
     【あなたの設定】
+    性別: {gender_role}
     難易度: {difficulty.upper()}
     役割: {config['role']}
     口調: {config['tone']}

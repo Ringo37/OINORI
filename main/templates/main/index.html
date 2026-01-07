@@ -114,6 +114,26 @@
           </select>
         </div>
 
+        <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg mt-4">
+          <label class="block text-gray-300 font-bold mb-3">面接官の性別:</label>
+  
+          <div class="flex gap-4">
+            <label class="cursor-pointer w-1/2">
+              <input type="radio" name="interviewer_gender" value="female" class="peer hidden" checked>
+              <div class="flex flex-col items-center justify-center p-4 rounded-lg border border-gray-600 bg-gray-750 transition-all hover:bg-gray-700 peer-checked:border-blue-500 peer-checked:bg-blue-900/20 peer-checked:text-blue-400">
+                <span class="font-bold">女性</span>
+              </div>
+            </label>
+
+            <label class="cursor-pointer w-1/2">
+              <input type="radio" name="interviewer_gender" value="male" class="peer hidden">
+              <div class="flex flex-col items-center justify-center p-4 rounded-lg border border-gray-600 bg-gray-750 transition-all hover:bg-gray-700 peer-checked:border-blue-500 peer-checked:bg-blue-900/20 peer-checked:text-blue-400">
+                <span class="font-bold">男性</span>
+              </div>
+            </label>
+          </div>
+        </div>
+
         <button
           id="enterBtn"
           class="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold py-4 px-8 rounded-full shadow-lg transform transition hover:scale-105 text-xl mt-10"
@@ -256,9 +276,13 @@
           console.log("WebSocket Connected");
           
           const difficulty = document.getElementById("difficultySelect").value;
+          const genderInput = document.querySelector('input[name="interviewer_gender"]:checked');
+          const gender = genderInput ? genderInput.value : "female";
+
           const initData = {
             type: "config",
             difficulty: difficulty,
+            gender: gender,
             resume: (typeof resumeData !== 'undefined') ? resumeData : null
           };
           socket.send(JSON.stringify(initData));
@@ -267,7 +291,11 @@
           if (initData.resume) msg += ` (履歴書あり)`;
           addMessage("system", msg);
 
-          startRecording();
+          await startRecording();
+
+          isAiSpeaking = true; 
+
+          updateStatus("面接官が入室しています... (待機中)");
         };
 
         // --- 受信処理 ---
@@ -333,14 +361,11 @@
           };
       }
 
-      // --- ★追加: 音声データ送信のガード処理 ---
       function sendAudioChunk(audioData) {
-          // AIが話しているときは送信しない（ここでブロック）
           if (isAiSpeaking) {
               return; 
           }
 
-          // WebSocketが生きていれば送信
           if (socket && socket.readyState === WebSocket.OPEN) {
               socket.send(audioData);
           }

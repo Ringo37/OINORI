@@ -23,8 +23,9 @@ class TranscriptConsumer(AsyncWebsocketConsumer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.resume_text = ""
-        self.system_prompt = None  # get_system_prompt()の結果を格納
-        self.conversation_history = [] # Gemini履歴
+        self.system_prompt = None 
+        self.conversation_history = [] 
+        self.tts_voice = "ja-JP-NanamiNeural"
 
     async def connect(self):
         await self.accept()
@@ -78,8 +79,8 @@ class TranscriptConsumer(AsyncWebsocketConsumer):
 
     async def generate_audio_and_send(self, text):
         """テキストを音声化してフロントエンドに送信"""
-        voice = "ja-JP-NanamiNeural"
-        tts = edge_tts.Communicate(text, voice, rate="+20%")
+        voice = self.tts_voice
+        tts = edge_tts.Communicate(text, voice=voice, rate="+20%")
         audio_bytes = b""
         try:
             async for chunk in tts.stream():
@@ -103,7 +104,6 @@ class TranscriptConsumer(AsyncWebsocketConsumer):
             )
 
             model = self._get_gemini_model()
-            # 履歴なしで単発生成
             response = await model.generate_content_async(prompt)
             greeting = response.text
 
@@ -112,10 +112,8 @@ class TranscriptConsumer(AsyncWebsocketConsumer):
             if not greeting or not greeting.strip():
                 greeting = "面接を始めます。自己紹介をお願いします。"
 
-            # 履歴に追加
             self.conversation_history.append({"role": "model", "parts": [greeting]})
-            
-            # フロントへ送信
+
             await self.send(json.dumps({"type": "ai", "message": greeting}))
             await self.generate_audio_and_send(greeting)
 
@@ -198,7 +196,6 @@ class TranscriptConsumer(AsyncWebsocketConsumer):
             result_json_str = response.text
             result_data = json.loads(result_json_str)
 
-            # DB保存
             @database_sync_to_async
             def save_record():
                 return InterviewSession.objects.create(
@@ -223,40 +220,40 @@ class TranscriptConsumer(AsyncWebsocketConsumer):
             }))
 
     async def receive(self, text_data=None, bytes_data=None):
-        # --- A. 音声データ受信 ---
         if bytes_data:
             audio_array = np.frombuffer(bytes_data, dtype=np.float32)
             await self.audio_queue.put(audio_array)
             return
 
-        # --- B. テキストデータ受信 (設定 or 制御コマンド) ---
         if text_data:
             try:
                 data = json.loads(text_data)
                 msg_type = data.get("type")
 
-                # 1. 設定受信 (面接開始前)
                 if msg_type == "config":
                     difficulty = data.get("difficulty", "normal")
-                    print(f"難易度設定受信: {difficulty}")
+                    gender = data.get("gender", "female")
 
-                    # 履歴書データの処理
+                    if gender == "male":
+                        self.tts_voice = "ja-JP-KeitaNeural"
+                        print("設定: 男性面接官 (Keita)")
+                    else:
+                        self.tts_voice = "ja-JP-NanamiNeural"
+                        print("設定: 女性面接官 (Nanami)")
+
                     resume_data = data.get("resume")
                     if resume_data:
                         await self.process_resume_file(resume_data)
                     else:
                         self.resume_text = ""
 
-                    # ★ prompts.py の関数を使用して動的にプロンプトを構築 ★
-                    self.system_prompt = get_system_prompt(difficulty, self.resume_text)
+                    self.system_prompt = get_system_prompt(difficulty, self.resume_text, gender)
                     
                     self.conversation_history = [] 
 
-                    # 最初の挨拶を開始
                     await self.send_initial_greeting()
                     return
 
-                # 2. 終了コマンド
                 elif msg_type == "finish":
                     await self.generate_evaluation()
                     return
@@ -295,13 +292,11 @@ class TranscriptConsumer(AsyncWebsocketConsumer):
                 print("Word読み込み完了")
             
             else:
-                # テキストファイルなど
                 try:
                     extracted_text = decoded_bytes.decode("utf-8")
                 except:
                     extracted_text = "【読込不可ファイル】"
             
-            # 文字数制限
             if len(extracted_text) > 3000:
                  extracted_text = extracted_text[:3000] + "\n...(省略)..."
             
